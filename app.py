@@ -111,12 +111,12 @@ if st.button("Submit Entry", type="primary"):
         "s1_present": s1_present,
         "s1_start": s1_time_str,
         "s1_sub": s1_sub if s1_present else "N/A",
-        "s1_topic": s1_topic if s1_present else "N/A",
+        "s1_topic": session_1_topic := s1_topic if s1_present else "N/A",
         "s1_target": s1_target if s1_present else "N/A",
         "s2_present": s2_present,
         "s2_start": s2_time_str,
         "s2_sub": s2_sub if s2_present else "N/A",
-        "s2_topic": s2_topic if s2_present else "N/A",
+        "s2_topic": session_2_topic := s2_topic if s2_present else "N/A",
         "s2_target": s2_target if s2_present else "N/A",
         "focus": focus_eval,
         "remarks": remarks.strip()
@@ -169,49 +169,4 @@ if st.button("Generate Formatted Report"):
 
         final_text = "\n".join(report_lines)
         st.text_area("Copy and paste to WhatsApp:", final_text, height=350)
-        "s2_start": s2_time_str,
-        "s2_sub": session_2_sub if session_2_present else "N/A",
-        "s2_topic": session_2_topic if session_2_present else "N/A",
-        "remarks": remarks.strip()
-    }
-
-    # Replace entry if already entered for this student today
-    logs = [l for l in logs if not (l["name"] == entry["name"] and l["date"] == entry["date"])]
-    logs.append(entry)
-    save_data(LOG_FILE, logs)
-    st.success(f"Log saved for {selected_student['name']}!")
-
-# --- 3. REPORT GENERATOR ---
-st.header("📋 Generate WhatsApp Report")
-target_grade = st.radio("Select Class Group", ["Plus One", "Plus Two"], horizontal=True)
-
-if st.button("Generate Formatted Report"):
-    today_str = str(date.today())
-    grade_logs = [l for l in logs if l.get("grade") == target_grade and l.get("date") == today_str]
-
-    if not grade_logs:
-        st.warning(f"No records found for {target_grade} today ({today_str}).")
-    else:
-        report_lines = [
-            f"*{target_grade.upper()} - DAILY HOSTEL STUDY REPORT*",
-            f"📅 *Date:* {today_str}",
-            "━━━━━━━━━━━━━━━━━━━━"
-        ]
-
-        for log in grade_logs:
-            s1_detail = f"Started: `{log['s1_start']}` | {log['s1_sub']} ({log['s1_topic'] or 'N/A'})" if log.get('s1_present', True) else "Absent"
-            s2_detail = f"Started: `{log['s2_start']}` | {log['s2_sub']} ({log['s2_topic'] or 'N/A'})" if log.get('s2_present', True) else "Absent"
-
-            student_block = [
-                f"👤 *{log['name']}* ({log['division']})",
-                f"▪️ *Session 1 (6:00 PM):* {s1_detail}",
-                f"▪️ *Session 2 (8:30 PM):* {s2_detail}"
-            ]
-            if log['remarks']:
-                student_block.append(f"⚠️ *Note:* {log['remarks']}")
-            student_block.append("────────────────────")
-            report_lines.extend(student_block)
-
-        final_text = "\n".join(report_lines)
-        st.text_area("Copy and paste to WhatsApp:", final_text, height=300)
-            
+        
