@@ -8,8 +8,9 @@ LOG_FILE = "daily_study_logs.json"
 
 DIVISIONS = {
     "Plus One": ["Plus One N1", "Plus One N2", "Plus One J1"],
-    "Plus Two": ["Plus Two J1", "Plus Two N1", "Plus Two N2"]
+    "Plus Two": ["Plus Two N1", "Plus Two J1"]
 }
+
 
 SUBJECTS = {
     "NEET": ["Physics", "Chemistry", "Zoology", "Botany", "English"],
