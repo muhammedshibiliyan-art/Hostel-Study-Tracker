@@ -5,8 +5,9 @@ from datetime import date
 
 DATA_FILE = "hostel_students.json"
 LOG_FILE = "daily_study_logs.json"
+DIVISIONS_FILE = "hostel_divisions.json"
 
-DIVISIONS = {
+DEFAULT_DIVISIONS = {
     "Plus One": ["Plus One N1", "Plus One N2", "Plus One J1"],
     "Plus Two": ["Plus Two N1", "Plus Two J1"]
 }
@@ -35,23 +36,44 @@ def save_data(filepath, data):
     with open(filepath, "w") as f:
         json.dump(data, f, indent=2)
 
+divisions = load_data(DIVISIONS_FILE, DEFAULT_DIVISIONS)
 students = load_data(DATA_FILE, [])
 logs = load_data(LOG_FILE, [])
 
 st.set_page_config(page_title="Hostel Study Tracker", page_icon="📖", layout="centered")
 st.title("📚 Hostel Study Tracker")
 
-# --- 1. STUDENT REGISTRATION ---
-with st.expander("➕ Register / Manage Students"):
+# --- 1. STUDENT & DIVISION MANAGEMENT ---
+with st.expander("➕ Register Students / Manage Divisions"):
+    st.subheader("Add Student")
     new_name = st.text_input("Student Name")
     new_grade = st.selectbox("Grade", ["Plus One", "Plus Two"], key="reg_grade")
-    new_div = st.selectbox("Division", DIVISIONS[new_grade], key="reg_div")
+    
+    current_div_options = divisions.get(new_grade, []) + ["➕ Add New Division..."]
+    selected_div_choice = st.selectbox("Division", current_div_options, key="reg_div")
+    
+    custom_div = ""
+    if selected_div_choice == "➕ Add New Division...":
+        custom_div = st.text_input("Enter New Division Name (e.g. Plus One J2 or N3)", key="custom_div_input").strip()
     
     if st.button("Save Student"):
-        if new_name.strip():
-            students.append({"name": new_name.strip(), "grade": new_grade, "division": new_div})
+        chosen_div = custom_div if selected_div_choice == "➕ Add New Division..." else selected_div_choice
+        
+        if not new_name.strip():
+            st.error("Please enter a valid student name.")
+        elif selected_div_choice == "➕ Add New Division..." and not custom_div:
+            st.error("Please enter the custom division name.")
+        else:
+            final_name = new_name.strip()
+            # If a new division was created, save it permanently
+            if selected_div_choice == "➕ Add New Division..." and custom_div not in divisions[new_grade]:
+                divisions[new_grade].append(custom_div)
+                save_data(DIVISIONS_FILE, divisions)
+
+            students.append({"name": final_name, "grade": new_grade, "division": chosen_div})
             save_data(DATA_FILE, students)
-            st.success(f"Added {new_name.strip()} ({new_div})")
+            st.toast(f"✅ Saved! {final_name} ({chosen_div}) registered.", icon="🎉")
+            st.success(f"Student '{final_name}' successfully added to {chosen_div}!")
             st.rerun()
 
     if students:
@@ -61,7 +83,7 @@ with st.expander("➕ Register / Manage Students"):
         if st.button("Delete Student") and del_target != "-- Select to Remove --":
             students = [s for s in students if f"{s['name']} ({s['division']})" != del_target]
             save_data(DATA_FILE, students)
-            st.warning(f"Removed {del_target}")
+            st.toast(f"🗑️ Removed {del_target}", icon="⚠️")
             st.rerun()
 
 if not students:
@@ -71,7 +93,6 @@ if not students:
 # --- 2. LOG / EDIT DAILY STUDY SESSION ---
 st.header("📝 Log / Edit Session")
 
-# Date Selector (Defaults to today, but adjustable)
 selected_date = st.date_input("Target Date", value=date.today())
 selected_date_str = str(selected_date)
 
@@ -82,14 +103,13 @@ selected_student = students[student_names.index(selected_display)]
 track = "JEE" if "J" in selected_student["division"] else "NEET"
 available_subjects = SUBJECTS[track]
 
-# Check if an entry already exists for this student on this date
 existing_entry = next(
     (l for l in logs if l.get("name") == selected_student["name"] and l.get("date") == selected_date_str), 
     None
 )
 
 if existing_entry:
-    st.info(f"✏️ Editing existing entry for **{selected_student['name']}** on **{selected_date_str}**.")
+    st.info(f"✏️ Editing entry for **{selected_student['name']}** on **{selected_date_str}**")
 else:
     st.caption(f"Track: **{track}** | Division: **{selected_student['division']}**")
 
@@ -100,15 +120,8 @@ with col1:
     default_s1_pres = existing_entry.get("s1_present", True) if existing_entry else True
     s1_present = st.checkbox("Present in Session 1", value=default_s1_pres, key="s1_pres")
     
-    s1_start_val = st.time_input(
-        "Actual Start Time", 
-        value=None, 
-        key="s1_time", 
-        disabled=not s1_present,
-        help="Leave empty if not recorded"
-    )
+    s1_start_val = st.time_input("Actual Start Time", value=None, key="s1_time", disabled=not s1_present)
     
-    # Pre-select subject if editing
     sub1_index = 0
     if existing_entry and existing_entry.get("s1_sub") in available_subjects:
         sub1_index = available_subjects.index(existing_entry["s1_sub"]) + 1
@@ -129,13 +142,7 @@ with col2:
     default_s2_pres = existing_entry.get("s2_present", True) if existing_entry else True
     s2_present = st.checkbox("Present in Session 2", value=default_s2_pres, key="s2_pres")
     
-    s2_start_val = st.time_input(
-        "Actual Start Time", 
-        value=None, 
-        key="s2_time", 
-        disabled=not s2_present,
-        help="Leave empty if not recorded"
-    )
+    s2_start_val = st.time_input("Actual Start Time", value=None, key="s2_time", disabled=not s2_present)
     
     sub2_index = 0
     if existing_entry and existing_entry.get("s2_sub") in available_subjects:
@@ -159,7 +166,6 @@ remarks = st.text_input("Remarks / Notes", value=default_rem, placeholder="e.g. 
 
 btn_label = "Update Entry" if existing_entry else "Submit Entry"
 if st.button(btn_label, type="primary"):
-    # Preserve previous times if user leaves time unselected while updating
     if s1_start_val:
         s1_time_str = s1_start_val.strftime("%I:%M %p")
     elif existing_entry and existing_entry.get("s1_start"):
@@ -198,7 +204,9 @@ if st.button(btn_label, type="primary"):
     logs = [l for l in logs if not (l["name"] == entry["name"] and l["date"] == entry["date"])]
     logs.append(entry)
     save_data(LOG_FILE, logs)
-    st.success(f"Saved entry for {selected_student['name']} ({selected_date_str})!")
+    
+    st.toast(f"✅ Entry saved for {selected_student['name']}!", icon="💾")
+    st.success(f"Saved! Record updated for {selected_student['name']} ({selected_date_str}).")
     st.rerun()
 
 # --- 3. REPORT GENERATOR ---
@@ -260,4 +268,3 @@ if st.button("Generate Formatted Report"):
 
         final_text = "\n".join(report_lines)
         st.text_area("Copy and paste to WhatsApp:", final_text, height=350)
-        
