@@ -10,8 +10,8 @@ DIVISIONS_FILE = "hostel_divisions.json"
 TOPICS_FILE = "subject_topics_cache.json"
 
 DEFAULT_DIVISIONS = {
-    "Plus One": ["Plus One N1", "Plus One N2", "Plus One J1"],
-    "Plus Two": ["Plus Two N1", "Plus Two J1"]
+    "Plus One": ["Plus One N1", "Plus One N2", "Plus One J1", "Plus One J2"],
+    "Plus Two": ["Plus Two N1", "Plus Two N2", "Plus Two J1"]
 }
 
 SUBJECTS = {
@@ -46,7 +46,12 @@ topic_cache = load_data(TOPICS_FILE, {})
 st.set_page_config(page_title="Hostel Study Tracker", page_icon="📖", layout="centered")
 st.title("📚 Hostel Study Tracker")
 
-tab_log, tab_report, tab_settings = st.tabs(["📝 Log Session", "📋 WhatsApp Report", "⚙️ Manage Roster"])
+tab_log, tab_report, tab_manage_logs, tab_settings = st.tabs([
+    "📝 Log Session", 
+    "📋 WhatsApp Report", 
+    "🗑️ Manage / Delete Logs",
+    "⚙️ Manage Roster"
+])
 
 # ==========================================
 # TAB 1: LOG DAILY STUDY SESSION
@@ -187,7 +192,6 @@ with tab_log:
         focus_idx = EFFORT_LEVELS.index(existing_entry["focus"]) if (existing_entry and existing_entry.get("focus") in EFFORT_LEVELS) else 0
         focus_eval = st.select_slider("Study Discipline & Focus", options=EFFORT_LEVELS, value=EFFORT_LEVELS[focus_idx])
 
-        # Remarks field starts completely blank for fresh input every time
         remarks = st.text_input("Remarks / Notes (Optional)", value="", placeholder="e.g. 10m late returning from break, attentive throughout", key=f"rem_{selected_student['name']}")
 
         btn_label = "Update Entry" if existing_entry else "Save Entry"
@@ -262,7 +266,6 @@ with tab_report:
             for log in grade_logs:
                 student_block = [f"👤 *{log['name']}* ({log['division']})"]
                 
-                # Session 1 Block
                 if log.get("s1_present", True):
                     student_block.append(f"▪️ *Session 1:* Started: `{log['s1_start']}`")
                     student_block.append(f"   ▫️ *Subject:* {log['s1_sub']}")
@@ -272,7 +275,6 @@ with tab_report:
                 else:
                     student_block.append("▪️ *Session 1:* Absent")
 
-                # Session 2 Block
                 if log.get("s2_present", True):
                     student_block.append(f"▪️ *Session 2:* Started: `{log['s2_start']}`")
                     student_block.append(f"   ▫️ *Subject:* {log['s2_sub']}")
@@ -301,7 +303,6 @@ with tab_report:
         st.text_area("WhatsApp Text Format:", final_text, height=350)
         
         encoded_text = urllib.parse.quote(final_text)
-        
         col_wa1, col_wa2 = st.columns(2)
         with col_wa1:
             st.link_button("📲 Regular WhatsApp", f"whatsapp://send?text={encoded_text}", use_container_width=True)
@@ -309,45 +310,84 @@ with tab_report:
             st.link_button("🌐 WhatsApp Web / Fallback", f"https://api.whatsapp.com/send?text={encoded_text}", use_container_width=True)
 
 # ==========================================
-# TAB 3: MANAGE ROSTER & DIVISIONS
+# TAB 3: MANAGE / DELETE LOGS
+# ==========================================
+with tab_manage_logs:
+    st.subheader("🗑️ Delete a Specific Entry")
+    del_log_date = st.date_input("Select Date of Entry", value=date.today(), key="del_log_date_pick")
+    del_log_date_str = str(del_log_date)
+
+    matching_logs = [l for l in logs if l.get("date") == del_log_date_str]
+
+    if not matching_logs:
+        st.info(f"No study records found for {del_log_date.strftime('%d-%m-%Y')}.")
+    else:
+        log_options = ["-- Select Entry to Delete --"] + [
+            f"{l['name']} ({l['division']}) - S1: {l.get('s1_sub', 'N/A')}, S2: {l.get('s2_sub', 'N/A')}"
+            for l in matching_logs
+        ]
+        
+        selected_log_to_delete = st.selectbox("Select Student Entry to Delete", log_options)
+
+        if st.button("🗑️ Delete Selected Entry Completely", type="primary", use_container_width=True):
+            if selected_log_to_delete == "-- Select Entry to Delete --":
+                st.warning("Please choose an entry from the list first.")
+            else:
+                target_student_name = selected_log_to_delete.split(" (")[0]
+                logs = [l for l in logs if not (l["name"] == target_student_name and l["date"] == del_log_date_str)]
+                save_data(LOG_FILE, logs)
+                st.toast(f"✅ Deleted record for {target_student_name} on {del_log_date_str}!", icon="🗑️")
+                st.success(f"Successfully deleted entry for {target_student_name}.")
+                st.rerun()
+
+# ==========================================
+# TAB 4: MANAGE ROSTER & DIVISIONS
 # ==========================================
 with tab_settings:
     st.subheader("➕ Add New Student")
     new_name = st.text_input("Student Name", key="new_s_name")
     new_grade = st.selectbox("Grade", ["Plus One", "Plus Two"], key="new_s_grade")
     
-    current_div_options = divisions.get(new_grade, []) + ["➕ Add New Division..."]
-    selected_div_choice = st.selectbox("Division", current_div_options, key="new_s_div")
-    
-    custom_div = ""
-    if selected_div_choice == "➕ Add New Division...":
-        custom_div = st.text_input("Enter New Division Name (e.g. Plus One J2)", key="custom_div_input").strip()
+    current_div_options = divisions.get(new_grade, [])
+    selected_div = st.selectbox("Division", current_div_options, key="new_s_div")
 
     if st.button("Register Student", use_container_width=True):
-        chosen_div = custom_div if selected_div_choice == "➕ Add New Division..." else selected_div_choice
-        
         if not new_name.strip():
             st.error("Please enter a student name.")
-        elif selected_div_choice == "➕ Add New Division..." and not custom_div:
-            st.error("Please provide the custom division name.")
+        elif not selected_div:
+            st.error("Please select a division.")
         else:
             final_name = new_name.strip()
-            if selected_div_choice == "➕ Add New Division..." and custom_div not in divisions[new_grade]:
-                divisions[new_grade].append(custom_div)
-                save_data(DIVISIONS_FILE, divisions)
-
-            students.append({"name": final_name, "grade": new_grade, "division": chosen_div})
+            students.append({"name": final_name, "grade": new_grade, "division": selected_div})
             save_data(DATA_FILE, students)
             st.toast(f"✅ Registered {final_name}!", icon="🎉")
-            st.success(f"{final_name} ({chosen_div}) added successfully.")
+            st.success(f"{final_name} ({selected_div}) added successfully.")
+            st.rerun()
+
+    st.write("---")
+    st.subheader("🏷️ Add New Division")
+    target_div_grade = st.selectbox("For Class", ["Plus One", "Plus Two"], key="new_div_grade")
+    new_custom_div = st.text_input("Division Name (e.g. Plus One J3 or Plus Two N3)", key="new_custom_div_box").strip()
+    
+    if st.button("Save New Division", use_container_width=True):
+        if not new_custom_div:
+            st.error("Please enter a division name.")
+        elif new_custom_div in divisions.get(target_div_grade, []):
+            st.warning(f"'{new_custom_div}' already exists.")
+        else:
+            divisions.setdefault(target_div_grade, []).append(new_custom_div)
+            save_data(DIVISIONS_FILE, divisions)
+            st.toast(f"✅ Division '{new_custom_div}' added!", icon="🎉")
+            st.success(f"Added division '{new_custom_div}' to {target_div_grade}.")
             st.rerun()
 
     if students:
         st.write("---")
-        st.subheader("🗑️ Remove Student")
-        del_target = st.selectbox("Select student to delete", ["-- Select --"] + [f"{s['name']} ({s['division']})" for s in students])
-        if st.button("Delete Student", use_container_width=True) and del_target != "-- Select --":
+        st.subheader("🗑️ Remove Student from Hostel Roster")
+        del_target = st.selectbox("Select student to delete from roster", ["-- Select --"] + [f"{s['name']} ({s['division']})" for s in students])
+        if st.button("Delete Student from Roster", use_container_width=True) and del_target != "-- Select --":
             students = [s for s in students if f"{s['name']} ({s['division']})" != del_target]
             save_data(DATA_FILE, students)
             st.toast(f"🗑️ Removed {del_target}", icon="⚠️")
             st.rerun()
+                
