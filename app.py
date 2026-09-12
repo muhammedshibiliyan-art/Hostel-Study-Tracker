@@ -111,12 +111,12 @@ if st.button("Submit Entry", type="primary"):
         "s1_present": s1_present,
         "s1_start": s1_time_str,
         "s1_sub": s1_sub if s1_present else "N/A",
-        "s1_topic": session_1_topic := s1_topic if s1_present else "N/A",
+        "s1_topic": s1_topic if (s1_present and s1_topic) else "N/A",
         "s1_target": s1_target if s1_present else "N/A",
         "s2_present": s2_present,
         "s2_start": s2_time_str,
         "s2_sub": s2_sub if s2_present else "N/A",
-        "s2_topic": session_2_topic := s2_topic if s2_present else "N/A",
+        "s2_topic": s2_topic if (s2_present and s2_topic) else "N/A",
         "s2_target": s2_target if s2_present else "N/A",
         "focus": focus_eval,
         "remarks": remarks.strip()
@@ -147,12 +147,12 @@ if st.button("Generate Formatted Report"):
 
         for log in grade_logs:
             if log.get("s1_present", True):
-                s1_info = f"Started: `{log['s1_start']}` | {log['s1_sub']} ({log['s1_topic'] or 'General'}) [{log['s1_target']}]"
+                s1_info = f"Started: `{log['s1_start']}` | {log['s1_sub']} ({log['s1_topic']}) [{log['s1_target']}]"
             else:
                 s1_info = "Absent"
 
             if log.get("s2_present", True):
-                s2_info = f"Started: `{log['s2_start']}` | {log['s2_sub']} ({log['s2_topic'] or 'General'}) [{log['s2_target']}]"
+                s2_info = f"Started: `{log['s2_start']}` | {log['s2_sub']} ({log['s2_topic']}) [{log['s2_target']}]"
             else:
                 s2_info = "Absent"
 
@@ -169,4 +169,3 @@ if st.button("Generate Formatted Report"):
 
         final_text = "\n".join(report_lines)
         st.text_area("Copy and paste to WhatsApp:", final_text, height=350)
-        
