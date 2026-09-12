@@ -2,7 +2,7 @@ import streamlit as st
 import json
 import os
 import urllib.parse
-from datetime import date, datetime, timedelta
+from datetime import date
 
 DATA_FILE = "hostel_students.json"
 LOG_FILE = "daily_study_logs.json"
@@ -58,7 +58,6 @@ with tab_log:
         selected_date = st.date_input("Date", value=date.today(), key="log_date")
         selected_date_str = str(selected_date)
 
-        # Calculate progress for selected date
         logged_names = {l["name"] for l in logs if l.get("date") == selected_date_str}
         total_students = len(students)
         logged_count = len([s for s in students if s["name"] in logged_names])
@@ -66,7 +65,6 @@ with tab_log:
 
         st.progress(progress_val, text=f"Logged: {logged_count} / {total_students} Students ({int(progress_val * 100)}%)")
 
-        # Visual indicator dropdown: 🟢 Logged vs ⚪ Pending
         student_display_options = []
         for s in students:
             status_icon = "🟢" if s["name"] in logged_names else "⚪"
@@ -110,13 +108,11 @@ with tab_log:
                 else:
                     s1_time_str = s1_preset.split("(")[-1].replace(")", "")
 
-                # Subject picker
                 sub1_index = 0
                 if existing_entry and existing_entry.get("s1_sub") in available_subjects:
                     sub1_index = available_subjects.index(existing_entry["s1_sub"])
                 s1_sub = st.selectbox("Subject", available_subjects, index=sub1_index, key="s1_sub")
 
-                # Topic suggest from cache
                 known_topics_s1 = topic_cache.get(s1_sub, [])
                 default_s1_topic = existing_entry.get("s1_topic", "") if existing_entry else ""
                 
@@ -191,12 +187,11 @@ with tab_log:
         focus_idx = EFFORT_LEVELS.index(existing_entry["focus"]) if (existing_entry and existing_entry.get("focus") in EFFORT_LEVELS) else 0
         focus_eval = st.select_slider("Study Discipline & Focus", options=EFFORT_LEVELS, value=EFFORT_LEVELS[focus_idx])
 
-        default_rem = existing_entry.get("remarks", "") if existing_entry else ""
-        remarks = st.text_input("Remarks / Notes", value=default_rem, placeholder="e.g. 10m late returning from break, attentive throughout")
+        # Remarks field starts completely blank for fresh input every time
+        remarks = st.text_input("Remarks / Notes (Optional)", value="", placeholder="e.g. 10m late returning from break, attentive throughout", key=f"rem_{selected_student['name']}")
 
         btn_label = "Update Entry" if existing_entry else "Save Entry"
         if st.button(btn_label, type="primary", use_container_width=True):
-            # Save topic to cache for autocomplete
             if s1_present and s1_topic.strip() and s1_topic.strip() != "N/A":
                 topic_cache.setdefault(s1_sub, [])
                 if s1_topic.strip() not in topic_cache[s1_sub]:
@@ -306,8 +301,12 @@ with tab_report:
         st.text_area("WhatsApp Text Format:", final_text, height=350)
         
         encoded_text = urllib.parse.quote(final_text)
-        wa_url = f"https://api.whatsapp.com/send?text={encoded_text}"
-        st.link_button("📲 Open in WhatsApp", wa_url, use_container_width=True)
+        
+        col_wa1, col_wa2 = st.columns(2)
+        with col_wa1:
+            st.link_button("📲 Regular WhatsApp", f"whatsapp://send?text={encoded_text}", use_container_width=True)
+        with col_wa2:
+            st.link_button("🌐 WhatsApp Web / Fallback", f"https://api.whatsapp.com/send?text={encoded_text}", use_container_width=True)
 
 # ==========================================
 # TAB 3: MANAGE ROSTER & DIVISIONS
@@ -352,4 +351,3 @@ with tab_settings:
             save_data(DATA_FILE, students)
             st.toast(f"🗑️ Removed {del_target}", icon="⚠️")
             st.rerun()
-        
