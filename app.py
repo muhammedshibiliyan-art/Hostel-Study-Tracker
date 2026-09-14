@@ -9,15 +9,6 @@ LOG_FILE = "daily_study_logs.json"
 DIVISIONS_FILE = "hostel_divisions.json"
 TOPICS_FILE = "subject_topics_cache.json"
 
-# Permanent roster saved directly in code so reboots never erase them
-DEFAULT_STUDENTS = [
-    {"name": "Amit manoj", "grade": "Plus Two", "division": "Plus Two N1"},
-    {"name": "S Balasubramaniam", "grade": "Plus Two", "division": "Plus Two J1"},
-    {"name": "Muhammed yahhya", "grade": "Plus Two", "division": "Plus Two N1"},
-    # Add any remaining student names here using the exact same format:
-    # {"name": "Student Name", "grade": "Plus One", "division": "Plus One N1"},
-]
-
 DEFAULT_DIVISIONS = {
     "Plus One": ["Plus One N1", "Plus One N2", "Plus One J1", "Plus One J2"],
     "Plus Two": ["Plus Two N1", "Plus Two N2", "Plus Two J1"]
@@ -49,9 +40,24 @@ def save_data(filepath, data):
         json.dump(data, f, indent=2)
 
 divisions = load_data(DIVISIONS_FILE, DEFAULT_DIVISIONS)
-students = load_data(DATA_FILE, DEFAULT_STUDENTS)
+students = load_data(DATA_FILE, [])
 logs = load_data(LOG_FILE, [])
 topic_cache = load_data(TOPICS_FILE, {})
+
+# Auto-recovery if students wipe on reboot but logs remain
+if not students and logs:
+    recovered = {}
+    for entry in logs:
+        name = entry.get("name")
+        if name and name not in recovered:
+            recovered[name] = {
+                "name": name,
+                "grade": entry.get("grade", "Plus Two"),
+                "division": entry.get("division", "Plus Two N1")
+            }
+    if recovered:
+        students = list(recovered.values())
+        save_data(DATA_FILE, students)
 
 st.set_page_config(page_title="Hostel Study Tracker", page_icon="📖", layout="centered")
 st.title("📚 Hostel Study Tracker")
@@ -68,7 +74,7 @@ tab_log, tab_report, tab_manage_logs, tab_settings = st.tabs([
 # ==========================================
 with tab_log:
     if not students:
-        st.info("⚠️ Go to the '⚙️ Manage Roster' tab to register students first.")
+        st.info("⚠️ Go to the '⚙️ Manage Roster' tab to register students or restore your backup.")
     else:
         selected_date = st.date_input("Date", value=date.today(), key="log_date_selector")
         selected_date_str = str(selected_date)
@@ -89,7 +95,6 @@ with tab_log:
         selected_index = student_display_options.index(selected_display)
         selected_student = students[selected_index]
 
-        # Key tied strictly to student and date so form state never conflicts
         s_key = f"{selected_student['name']}_{selected_date_str}"
         track = "JEE" if "J" in selected_student["division"] else "NEET"
         available_subjects = SUBJECTS.get(track, ["Physics", "Chemistry", "Maths", "English"])
@@ -127,7 +132,7 @@ with tab_log:
                 s1_sub = st.selectbox("Subject", available_subjects, index=sub1_idx, key=f"s1_sub_{s_key}")
 
                 def_s1_top = existing_entry.get("s1_topic", "") if existing_entry else ""
-                s1_topic = st.text_input("Topic Studied (Required)", value=def_s1_top, placeholder="e.g. Thermodynamics, Complex Numbers", key=f"s1_top_{s_key}")
+                s1_topic = st.text_input("Topic Studied (Required)", value=def_s1_top, placeholder="e.g. Thermodynamics, Coordinate Geometry", key=f"s1_top_{s_key}")
 
                 target_opts = ["Completed", "Partial", "Incomplete"]
                 target1_idx = target_opts.index(existing_entry["s1_target"]) if (existing_entry and existing_entry.get("s1_target") in target_opts) else 0
@@ -164,7 +169,7 @@ with tab_log:
                 s2_sub = st.selectbox("Subject", available_subjects, index=sub2_idx, key=f"s2_sub_{s_key}")
 
                 def_s2_top = existing_entry.get("s2_topic", "") if existing_entry else ""
-                s2_topic = st.text_input("Topic Studied (Required)", value=def_s2_top, placeholder="e.g. Chemical Kinetics, Integration", key=f"s2_top_{s_key}")
+                s2_topic = st.text_input("Topic Studied (Required)", value=def_s2_top, placeholder="e.g. Chemical Bonding, Matrices", key=f"s2_top_{s_key}")
 
                 target2_idx = target_opts.index(existing_entry["s2_target"]) if (existing_entry and existing_entry.get("s2_target") in target_opts) else 0
                 s2_target = st.radio("Target Status", target_opts, index=target2_idx, horizontal=True, key=f"s2_tar_{s_key}")
@@ -247,7 +252,7 @@ with tab_report:
             for log in grade_logs:
                 student_block = [f"👤 *{log['name']}* ({log['division']})"]
                 
-                # Session 1 formatting: Subject, Topic, and Completion status clearly included
+                # Session 1 formatting: Subject, Topic, and Target Status
                 if log.get("s1_present", True):
                     student_block.append(f"▪️ *Session 1:* Started: `{log.get('s1_start', '06:00 PM')}`")
                     student_block.append(f"   ▫️ *Subject:* {log.get('s1_sub', 'N/A')}")
@@ -257,7 +262,7 @@ with tab_report:
                 else:
                     student_block.append("▪️ *Session 1:* Absent")
 
-                # Session 2 formatting: Subject, Topic, and Completion status clearly included
+                # Session 2 formatting: Subject, Topic, and Target Status
                 if log.get("s2_present", True):
                     student_block.append(f"▪️ *Session 2:* Started: `{log.get('s2_start', '08:30 PM')}`")
                     student_block.append(f"   ▫️ *Subject:* {log.get('s2_sub', 'N/A')}")
@@ -323,7 +328,7 @@ with tab_manage_logs:
                 st.rerun()
 
 # ==========================================
-# TAB 4: MANAGE ROSTER & DIVISIONS
+# TAB 4: MANAGE ROSTER & BACKUP
 # ==========================================
 with tab_settings:
     st.subheader("➕ Add New Student")
@@ -344,6 +349,32 @@ with tab_settings:
             save_data(DATA_FILE, students)
             st.toast(f"✅ Registered {final_name}!", icon="🎉")
             st.rerun()
+
+    st.write("---")
+    st.subheader("💾 Roster Backup & Restore (Prevents Data Loss)")
+    
+    # Download current student roster
+    student_json_str = json.dumps(students, indent=2)
+    st.download_button(
+        label="📥 Download Roster Backup (JSON)",
+        data=student_json_str,
+        file_name="hostel_students_backup.json",
+        mime="application/json",
+        use_container_width=True
+    )
+    
+    # Upload backup to restore if server ever clears
+    uploaded_roster = st.file_uploader("Upload Roster Backup to Restore", type=["json"], key="roster_upload")
+    if uploaded_roster is not None:
+        try:
+            restored_data = json.load(uploaded_roster)
+            if isinstance(restored_data, list) and st.button("Confirm Restore Roster", type="primary"):
+                students = restored_data
+                save_data(DATA_FILE, students)
+                st.toast("✅ Roster restored successfully!", icon="🎉")
+                st.rerun()
+        except Exception:
+            st.error("Invalid JSON file uploaded.")
 
     st.write("---")
     st.subheader("🏷️ Add New Division")
@@ -370,4 +401,4 @@ with tab_settings:
             save_data(DATA_FILE, students)
             st.toast(f"🗑️ Removed {del_target}", icon="⚠️")
             st.rerun()
-                
+                    
