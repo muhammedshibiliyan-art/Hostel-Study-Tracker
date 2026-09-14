@@ -15,7 +15,7 @@ DEFAULT_DIVISIONS = {
 }
 
 SUBJECTS = {
-    "NEET": ["Physics", "Chemistry", "Zoology", "Botany", "English"],
+    "NEET": ["Physics", "Chemistry", "Zoology", "Botany", "English", "Maths"],
     "JEE": ["Physics", "Chemistry", "Maths", "English"]
 }
 
