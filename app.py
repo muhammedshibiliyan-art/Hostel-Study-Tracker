@@ -1,18 +1,3 @@
-# --- RECOVERY HOOK ---
-if not students and logs:
-    recovered = {}
-    for entry in logs:
-        name = entry.get("name")
-        if name and name not in recovered:
-            recovered[name] = {
-                "name": name,
-                "grade": entry.get("grade", "Plus Two"),
-                "division": entry.get("division", "Plus Two N1")
-            }
-    if recovered:
-        students = list(recovered.values())
-        save_data(DATA_FILE, students)
-
 import streamlit as st
 import json
 import os
@@ -57,6 +42,22 @@ divisions = load_data(DIVISIONS_FILE, DEFAULT_DIVISIONS)
 students = load_data(DATA_FILE, [])
 logs = load_data(LOG_FILE, [])
 topic_cache = load_data(TOPICS_FILE, {})
+
+# --- AUTO-RECOVERY HOOK ---
+# If students got wiped on reboot, rebuild them from the study logs
+if not students and logs:
+    recovered = {}
+    for entry in logs:
+        name = entry.get("name")
+        if name and name not in recovered:
+            recovered[name] = {
+                "name": name,
+                "grade": entry.get("grade", "Plus Two"),
+                "division": entry.get("division", "Plus Two N1")
+            }
+    if recovered:
+        students = list(recovered.values())
+        save_data(DATA_FILE, students)
 
 st.set_page_config(page_title="Hostel Study Tracker", page_icon="📖", layout="centered")
 st.title("📚 Hostel Study Tracker")
@@ -374,4 +375,4 @@ with tab_settings:
             save_data(DATA_FILE, students)
             st.toast(f"🗑️ Removed {del_target}", icon="⚠️")
             st.rerun()
-    
+                    
