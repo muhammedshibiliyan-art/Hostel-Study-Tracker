@@ -8,13 +8,14 @@ DATA_FILE = "hostel_students.json"
 LOG_FILE = "daily_study_logs.json"
 DIVISIONS_FILE = "hostel_divisions.json"
 TOPICS_FILE = "subject_topics_cache.json"
+SUBJECTS_FILE = "hostel_subjects.json"
 
 DEFAULT_DIVISIONS = {
     "Plus One": ["Plus One N1", "Plus One N2", "Plus One J1", "Plus One J2"],
     "Plus Two": ["Plus Two N1", "Plus Two N2", "Plus Two J1"]
 }
 
-SUBJECTS = {
+DEFAULT_SUBJECTS = {
     "NEET": ["Physics", "Chemistry", "Zoology", "Botany", "English", "Maths"],
     "JEE": ["Physics", "Chemistry", "Maths", "English"]
 }
@@ -39,6 +40,7 @@ def save_data(filepath, data):
         json.dump(data, f, indent=2)
 
 divisions = load_data(DIVISIONS_FILE, DEFAULT_DIVISIONS)
+subjects_data = load_data(SUBJECTS_FILE, DEFAULT_SUBJECTS)
 students = load_data(DATA_FILE, [])
 logs = load_data(LOG_FILE, [])
 topic_cache = load_data(TOPICS_FILE, {})
@@ -50,7 +52,7 @@ tab_log, tab_report, tab_manage_logs, tab_settings = st.tabs([
     "📝 Log Session", 
     "📋 WhatsApp Report", 
     "🗑️ Manage / Delete Logs",
-    "⚙️ Manage Roster"
+    "⚙️ Manage Roster & Settings"
 ])
 
 # ==========================================
@@ -58,7 +60,7 @@ tab_log, tab_report, tab_manage_logs, tab_settings = st.tabs([
 # ==========================================
 with tab_log:
     if not students:
-        st.info("⚠️ Go to the '⚙️ Manage Roster' tab to register students first.")
+        st.info("⚠️ Go to the '⚙️ Manage Roster & Settings' tab to register students first.")
     else:
         selected_date = st.date_input("Date", value=date.today(), key="log_date")
         selected_date_str = str(selected_date)
@@ -80,7 +82,9 @@ with tab_log:
         selected_student = students[selected_index]
 
         track = "JEE" if "J" in selected_student["division"] else "NEET"
-        available_subjects = SUBJECTS[track]
+        available_subjects = subjects_data.get(track, DEFAULT_SUBJECTS[track])
+        if "Maths" not in available_subjects:
+            available_subjects.append("Maths")
 
         existing_entry = next(
             (l for l in logs if l.get("name") == selected_student["name"] and l.get("date") == selected_date_str), 
@@ -341,7 +345,7 @@ with tab_manage_logs:
                 st.rerun()
 
 # ==========================================
-# TAB 4: MANAGE ROSTER & DIVISIONS
+# TAB 4: MANAGE ROSTER & SETTINGS
 # ==========================================
 with tab_settings:
     st.subheader("➕ Add New Student")
@@ -381,6 +385,24 @@ with tab_settings:
             st.success(f"Added division '{new_custom_div}' to {target_div_grade}.")
             st.rerun()
 
+    st.write("---")
+    st.subheader("📚 Add New Subject")
+    target_track = st.selectbox("Subject Category", ["NEET", "JEE"], key="new_subj_track")
+    new_subject_name = st.text_input("Subject Name (e.g. Maths)", key="new_subject_input").strip()
+
+    if st.button("Save Subject", use_container_width=True):
+        if not new_subject_name:
+            st.error("Please enter a subject name.")
+        elif new_subject_name in subjects_data.get(target_track, []):
+            st.warning(f"'{new_subject_name}' is already in {target_track}.")
+        else:
+            subjects_data.setdefault(target_track, list(DEFAULT_SUBJECTS[target_track]))
+            subjects_data[target_track].append(new_subject_name)
+            save_data(SUBJECTS_FILE, subjects_data)
+            st.toast(f"✅ Added {new_subject_name} to {target_track}!", icon="🎉")
+            st.success(f"Added {new_subject_name} to {target_track}.")
+            st.rerun()
+
     if students:
         st.write("---")
         st.subheader("🗑️ Remove Student from Hostel Roster")
@@ -390,4 +412,4 @@ with tab_settings:
             save_data(DATA_FILE, students)
             st.toast(f"🗑️ Removed {del_target}", icon="⚠️")
             st.rerun()
-        
+    
