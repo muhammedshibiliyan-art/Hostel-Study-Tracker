@@ -1,3 +1,18 @@
+# --- RECOVERY HOOK ---
+if not students and logs:
+    recovered = {}
+    for entry in logs:
+        name = entry.get("name")
+        if name and name not in recovered:
+            recovered[name] = {
+                "name": name,
+                "grade": entry.get("grade", "Plus Two"),
+                "division": entry.get("division", "Plus Two N1")
+            }
+    if recovered:
+        students = list(recovered.values())
+        save_data(DATA_FILE, students)
+
 import streamlit as st
 import json
 import os
