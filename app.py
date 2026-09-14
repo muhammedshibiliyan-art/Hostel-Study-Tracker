@@ -8,14 +8,13 @@ DATA_FILE = "hostel_students.json"
 LOG_FILE = "daily_study_logs.json"
 DIVISIONS_FILE = "hostel_divisions.json"
 TOPICS_FILE = "subject_topics_cache.json"
-SUBJECTS_FILE = "hostel_subjects.json"
 
 DEFAULT_DIVISIONS = {
     "Plus One": ["Plus One N1", "Plus One N2", "Plus One J1", "Plus One J2"],
     "Plus Two": ["Plus Two N1", "Plus Two N2", "Plus Two J1"]
 }
 
-DEFAULT_SUBJECTS = {
+SUBJECTS = {
     "NEET": ["Physics", "Chemistry", "Zoology", "Botany", "English", "Maths"],
     "JEE": ["Physics", "Chemistry", "Maths", "English"]
 }
@@ -40,7 +39,6 @@ def save_data(filepath, data):
         json.dump(data, f, indent=2)
 
 divisions = load_data(DIVISIONS_FILE, DEFAULT_DIVISIONS)
-subjects_data = load_data(SUBJECTS_FILE, DEFAULT_SUBJECTS)
 students = load_data(DATA_FILE, [])
 logs = load_data(LOG_FILE, [])
 topic_cache = load_data(TOPICS_FILE, {})
@@ -52,7 +50,7 @@ tab_log, tab_report, tab_manage_logs, tab_settings = st.tabs([
     "📝 Log Session", 
     "📋 WhatsApp Report", 
     "🗑️ Manage / Delete Logs",
-    "⚙️ Manage Roster & Settings"
+    "⚙️ Manage Roster"
 ])
 
 # ==========================================
@@ -60,9 +58,9 @@ tab_log, tab_report, tab_manage_logs, tab_settings = st.tabs([
 # ==========================================
 with tab_log:
     if not students:
-        st.info("⚠️ Go to the '⚙️ Manage Roster & Settings' tab to register students first.")
+        st.info("⚠️ Go to the '⚙️ Manage Roster' tab to register students first.")
     else:
-        selected_date = st.date_input("Date", value=date.today(), key="log_date")
+        selected_date = st.date_input("Date", value=date.today(), key="log_date_selector")
         selected_date_str = str(selected_date)
 
         logged_names = {l["name"] for l in logs if l.get("date") == selected_date_str}
@@ -77,14 +75,13 @@ with tab_log:
             status_icon = "🟢" if s["name"] in logged_names else "⚪"
             student_display_options.append(f"{status_icon} {s['name']} ({s['division']})")
 
-        selected_display = st.selectbox("Select Student", student_display_options)
+        selected_display = st.selectbox("Select Student", student_display_options, key="active_student_picker")
         selected_index = student_display_options.index(selected_display)
         selected_student = students[selected_index]
 
+        s_key = f"{selected_student['name']}_{selected_date_str}"
         track = "JEE" if "J" in selected_student["division"] else "NEET"
-        available_subjects = subjects_data.get(track, DEFAULT_SUBJECTS[track])
-        if "Maths" not in available_subjects:
-            available_subjects.append("Maths")
+        available_subjects = SUBJECTS.get(track, ["Physics", "Chemistry", "Maths", "English"])
 
         existing_entry = next(
             (l for l in logs if l.get("name") == selected_student["name"] and l.get("date") == selected_date_str), 
@@ -92,52 +89,41 @@ with tab_log:
         )
 
         if existing_entry:
-            st.info(f"✏️ Editing entry for **{selected_student['name']}**")
+            st.info(f"✏️ Editing saved entry for **{selected_student['name']}**")
 
         st.write("---")
         session_tabs = st.tabs(["Session 1 (6:00 PM – 7:30 PM)", "Session 2 (8:30 PM – 11:30 PM)"])
 
         # --- SESSION 1 ---
         with session_tabs[0]:
-            default_s1_pres = existing_entry.get("s1_present", True) if existing_entry else True
-            s1_present = st.checkbox("Present in Session 1", value=default_s1_pres, key="s1_pres")
+            def_s1_pres = existing_entry.get("s1_present", True) if existing_entry else True
+            s1_present = st.checkbox("Present in Session 1", value=def_s1_pres, key=f"s1_p_{s_key}")
 
             if s1_present:
                 st.caption("Quick Start Time:")
-                s1_preset = st.radio(
-                    "S1 Quick Time",
-                    ["On Time (06:00 PM)", "+5m (06:05 PM)", "+10m (06:10 PM)", "+15m (06:15 PM)", "+30m (06:30 PM)", "Custom"],
-                    horizontal=True,
-                    key="s1_quick"
-                )
+                quick_times_s1 = ["On Time (06:00 PM)", "+5m (06:05 PM)", "+10m (06:10 PM)", "+15m (06:15 PM)", "+30m (06:30 PM)", "Custom"]
+                s1_preset = st.radio("S1 Quick Time", quick_times_s1, horizontal=True, key=f"s1_q_{s_key}")
 
                 if s1_preset == "Custom":
-                    s1_start_val = st.time_input("Custom Start Time", value=None, key="s1_custom_time")
+                    s1_start_val = st.time_input("Custom Start Time", value=None, key=f"s1_t_{s_key}")
                     s1_time_str = s1_start_val.strftime("%I:%M %p") if s1_start_val else "Not logged"
                 else:
                     s1_time_str = s1_preset.split("(")[-1].replace(")", "")
 
-                sub1_index = 0
+                sub1_idx = 0
                 if existing_entry and existing_entry.get("s1_sub") in available_subjects:
-                    sub1_index = available_subjects.index(existing_entry["s1_sub"])
-                s1_sub = st.selectbox("Subject", available_subjects, index=sub1_index, key="s1_sub")
+                    sub1_idx = available_subjects.index(existing_entry["s1_sub"])
+                s1_sub = st.selectbox("Subject", available_subjects, index=sub1_idx, key=f"s1_sub_{s_key}")
 
-                known_topics_s1 = topic_cache.get(s1_sub, [])
-                default_s1_topic = existing_entry.get("s1_topic", "") if existing_entry else ""
-                
-                if known_topics_s1:
-                    topic_choice_s1 = st.selectbox("Previous Topics (or type below)", ["-- New Topic --"] + known_topics_s1, key="s1_cache_picker")
-                    if topic_choice_s1 != "-- New Topic --":
-                        default_s1_topic = topic_choice_s1
-
-                s1_topic = st.text_input("Topic Studied", value=default_s1_topic, key="s1_topic_input")
+                def_s1_top = existing_entry.get("s1_topic", "") if existing_entry else ""
+                s1_topic = st.text_input("Topic Studied (Required)", value=def_s1_top, placeholder="e.g. Thermodynamics, Coordinate Geometry", key=f"s1_top_{s_key}")
 
                 target_opts = ["Completed", "Partial", "Incomplete"]
                 target1_idx = target_opts.index(existing_entry["s1_target"]) if (existing_entry and existing_entry.get("s1_target") in target_opts) else 0
-                s1_target = st.radio("Target Status", target_opts, index=target1_idx, horizontal=True, key="s1_target")
+                s1_target = st.radio("Target Status", target_opts, index=target1_idx, horizontal=True, key=f"s1_tar_{s_key}")
 
-                default_s1_quiz = existing_entry.get("s1_quiz", "") if existing_entry else ""
-                s1_quiz = st.text_input("MCQ / Quiz Score", value=default_s1_quiz, placeholder="e.g. 4/5 or Good concept", key="s1_quiz")
+                def_s1_qz = existing_entry.get("s1_quiz", "") if existing_entry else ""
+                s1_quiz = st.text_input("MCQ / Quiz Score", value=def_s1_qz, placeholder="e.g. 4/5 or Good concept", key=f"s1_qz_{s_key}")
             else:
                 s1_time_str = "Absent"
                 s1_sub = "N/A"
@@ -147,44 +133,33 @@ with tab_log:
 
         # --- SESSION 2 ---
         with session_tabs[1]:
-            default_s2_pres = existing_entry.get("s2_present", True) if existing_entry else True
-            s2_present = st.checkbox("Present in Session 2", value=default_s2_pres, key="s2_pres")
+            def_s2_pres = existing_entry.get("s2_present", True) if existing_entry else True
+            s2_present = st.checkbox("Present in Session 2", value=def_s2_pres, key=f"s2_p_{s_key}")
 
             if s2_present:
                 st.caption("Quick Start Time:")
-                s2_preset = st.radio(
-                    "S2 Quick Time",
-                    ["On Time (08:30 PM)", "+5m (08:35 PM)", "+10m (08:40 PM)", "+15m (08:45 PM)", "+30m (09:00 PM)", "Custom"],
-                    horizontal=True,
-                    key="s2_quick"
-                )
+                quick_times_s2 = ["On Time (08:30 PM)", "+5m (08:35 PM)", "+10m (08:40 PM)", "+15m (08:45 PM)", "+30m (09:00 PM)", "Custom"]
+                s2_preset = st.radio("S2 Quick Time", quick_times_s2, horizontal=True, key=f"s2_q_{s_key}")
 
                 if s2_preset == "Custom":
-                    s2_start_val = st.time_input("Custom Start Time", value=None, key="s2_custom_time")
+                    s2_start_val = st.time_input("Custom Start Time", value=None, key=f"s2_t_{s_key}")
                     s2_time_str = s2_start_val.strftime("%I:%M %p") if s2_start_val else "Not logged"
                 else:
                     s2_time_str = s2_preset.split("(")[-1].replace(")", "")
 
-                sub2_index = 0
+                sub2_idx = 0
                 if existing_entry and existing_entry.get("s2_sub") in available_subjects:
-                    sub2_index = available_subjects.index(existing_entry["s2_sub"])
-                s2_sub = st.selectbox("Subject", available_subjects, index=sub2_index, key="s2_sub")
+                    sub2_idx = available_subjects.index(existing_entry["s2_sub"])
+                s2_sub = st.selectbox("Subject", available_subjects, index=sub2_idx, key=f"s2_sub_{s_key}")
 
-                known_topics_s2 = topic_cache.get(s2_sub, [])
-                default_s2_topic = existing_entry.get("s2_topic", "") if existing_entry else ""
-
-                if known_topics_s2:
-                    topic_choice_s2 = st.selectbox("Previous Topics (or type below)", ["-- New Topic --"] + known_topics_s2, key="s2_cache_picker")
-                    if topic_choice_s2 != "-- New Topic --":
-                        default_s2_topic = topic_choice_s2
-
-                s2_topic = st.text_input("Topic Studied", value=default_s2_topic, key="s2_topic_input")
+                def_s2_top = existing_entry.get("s2_topic", "") if existing_entry else ""
+                s2_topic = st.text_input("Topic Studied (Required)", value=def_s2_top, placeholder="e.g. Chemical Bonding, Matrices", key=f"s2_top_{s_key}")
 
                 target2_idx = target_opts.index(existing_entry["s2_target"]) if (existing_entry and existing_entry.get("s2_target") in target_opts) else 0
-                s2_target = st.radio("Target Status", target_opts, index=target2_idx, horizontal=True, key="s2_target")
+                s2_target = st.radio("Target Status", target_opts, index=target2_idx, horizontal=True, key=f"s2_tar_{s_key}")
 
-                default_s2_quiz = existing_entry.get("s2_quiz", "") if existing_entry else ""
-                s2_quiz = st.text_input("MCQ / Quiz Score", value=default_s2_quiz, placeholder="e.g. 3/5 or Needs revision", key="s2_quiz")
+                def_s2_qz = existing_entry.get("s2_quiz", "") if existing_entry else ""
+                s2_quiz = st.text_input("MCQ / Quiz Score", value=def_s2_qz, placeholder="e.g. 3/5 or Needs revision", key=f"s2_qz_{s_key}")
             else:
                 s2_time_str = "Absent"
                 s2_sub = "N/A"
@@ -194,23 +169,15 @@ with tab_log:
 
         st.write("---")
         focus_idx = EFFORT_LEVELS.index(existing_entry["focus"]) if (existing_entry and existing_entry.get("focus") in EFFORT_LEVELS) else 0
-        focus_eval = st.select_slider("Study Discipline & Focus", options=EFFORT_LEVELS, value=EFFORT_LEVELS[focus_idx])
+        focus_eval = st.select_slider("Study Discipline & Focus", options=EFFORT_LEVELS, value=EFFORT_LEVELS[focus_idx], key=f"foc_{s_key}")
 
-        remarks = st.text_input("Remarks / Notes (Optional)", value="", placeholder="e.g. 10m late returning from break, attentive throughout", key=f"rem_{selected_student['name']}")
+        def_remarks = existing_entry.get("remarks", "") if existing_entry else ""
+        remarks = st.text_input("Remarks / Notes (Optional)", value=def_remarks, placeholder="e.g. 10m late returning from break, attentive throughout", key=f"rem_{s_key}")
 
         btn_label = "Update Entry" if existing_entry else "Save Entry"
         if st.button(btn_label, type="primary", use_container_width=True):
-            if s1_present and s1_topic.strip() and s1_topic.strip() != "N/A":
-                topic_cache.setdefault(s1_sub, [])
-                if s1_topic.strip() not in topic_cache[s1_sub]:
-                    topic_cache[s1_sub].append(s1_topic.strip())
-
-            if s2_present and s2_topic.strip() and s2_topic.strip() != "N/A":
-                topic_cache.setdefault(s2_sub, [])
-                if s2_topic.strip() not in topic_cache[s2_sub]:
-                    topic_cache[s2_sub].append(s2_topic.strip())
-
-            save_data(TOPICS_FILE, topic_cache)
+            clean_s1_top = s1_topic.strip() if s1_present and s1_topic.strip() else ("N/A" if not s1_present else "Not Specified")
+            clean_s2_top = s2_topic.strip() if s2_present and s2_topic.strip() else ("N/A" if not s2_present else "Not Specified")
 
             entry = {
                 "date": selected_date_str,
@@ -220,13 +187,13 @@ with tab_log:
                 "s1_present": s1_present,
                 "s1_start": s1_time_str,
                 "s1_sub": s1_sub,
-                "s1_topic": s1_topic.strip() if s1_present else "N/A",
+                "s1_topic": clean_s1_top,
                 "s1_target": s1_target,
                 "s1_quiz": s1_quiz.strip(),
                 "s2_present": s2_present,
                 "s2_start": s2_time_str,
                 "s2_sub": s2_sub,
-                "s2_topic": s2_topic.strip() if s2_present else "N/A",
+                "s2_topic": clean_s2_top,
                 "s2_target": s2_target,
                 "s2_quiz": s2_quiz.strip(),
                 "focus": focus_eval,
@@ -238,7 +205,6 @@ with tab_log:
             save_data(LOG_FILE, logs)
             
             st.toast(f"✅ Saved for {selected_student['name']}!", icon="💾")
-            st.success(f"Record saved for {selected_student['name']}.")
             st.rerun()
 
 # ==========================================
@@ -270,25 +236,27 @@ with tab_report:
             for log in grade_logs:
                 student_block = [f"👤 *{log['name']}* ({log['division']})"]
                 
+                # Session 1 formatting
                 if log.get("s1_present", True):
-                    student_block.append(f"▪️ *Session 1:* Started: `{log['s1_start']}`")
-                    student_block.append(f"   ▫️ *Subject:* {log['s1_sub']}")
-                    student_block.append(f"   ▫️ *Topic:* {log['s1_topic']} ({log['s1_target']})")
-                    if log.get("s1_quiz"):
-                        student_block.append(f"   ▫️ *Topic Check (MCQ):* {log['s1_quiz']}")
+                    student_block.append(f"▪️ *Session 1:* Started: `{log.get('s1_start', '06:00 PM')}`")
+                    student_block.append(f"   ▫️ *Subject:* {log.get('s1_sub', 'N/A')}")
+                    student_block.append(f"   ▫️ *Topic:* {log.get('s1_topic', 'N/A')} ({log.get('s1_target', 'N/A')})")
+                    quiz_val1 = log.get("s1_quiz") if log.get("s1_quiz") else "Nil"
+                    student_block.append(f"   ▫️ *Topic Check (MCQ):* {quiz_val1}")
                 else:
                     student_block.append("▪️ *Session 1:* Absent")
 
+                # Session 2 formatting
                 if log.get("s2_present", True):
-                    student_block.append(f"▪️ *Session 2:* Started: `{log['s2_start']}`")
-                    student_block.append(f"   ▫️ *Subject:* {log['s2_sub']}")
-                    student_block.append(f"   ▫️ *Topic:* {log['s2_topic']} ({log['s2_target']})")
-                    if log.get("s2_quiz"):
-                        student_block.append(f"   ▫️ *Topic Check (MCQ):* {log['s2_quiz']}")
+                    student_block.append(f"▪️ *Session 2:* Started: `{log.get('s2_start', '08:30 PM')}`")
+                    student_block.append(f"   ▫️ *Subject:* {log.get('s2_sub', 'N/A')}")
+                    student_block.append(f"   ▫️ *Topic:* {log.get('s2_topic', 'N/A')} ({log.get('s2_target', 'N/A')})")
+                    quiz_val2 = log.get("s2_quiz") if log.get("s2_quiz") else "Nil"
+                    student_block.append(f"   ▫️ *Topic Check (MCQ):* {quiz_val2}")
                 else:
                     student_block.append("▪️ *Session 2:* Absent")
 
-                student_block.append(f"▪️ *Focus:* {log['focus']}")
+                student_block.append(f"▪️ *Focus:* {log.get('focus', '⭐ High Focus (Distraction-free)')}")
                 
                 if log.get('remarks'):
                     student_block.append(f"⚠️ *Note:* {log['remarks']}")
@@ -341,11 +309,10 @@ with tab_manage_logs:
                 logs = [l for l in logs if not (l["name"] == target_student_name and l["date"] == del_log_date_str)]
                 save_data(LOG_FILE, logs)
                 st.toast(f"✅ Deleted record for {target_student_name} on {del_log_date_str}!", icon="🗑️")
-                st.success(f"Successfully deleted entry for {target_student_name}.")
                 st.rerun()
 
 # ==========================================
-# TAB 4: MANAGE ROSTER & SETTINGS
+# TAB 4: MANAGE ROSTER & DIVISIONS
 # ==========================================
 with tab_settings:
     st.subheader("➕ Add New Student")
@@ -365,7 +332,6 @@ with tab_settings:
             students.append({"name": final_name, "grade": new_grade, "division": selected_div})
             save_data(DATA_FILE, students)
             st.toast(f"✅ Registered {final_name}!", icon="🎉")
-            st.success(f"{final_name} ({selected_div}) added successfully.")
             st.rerun()
 
     st.write("---")
@@ -382,25 +348,6 @@ with tab_settings:
             divisions.setdefault(target_div_grade, []).append(new_custom_div)
             save_data(DIVISIONS_FILE, divisions)
             st.toast(f"✅ Division '{new_custom_div}' added!", icon="🎉")
-            st.success(f"Added division '{new_custom_div}' to {target_div_grade}.")
-            st.rerun()
-
-    st.write("---")
-    st.subheader("📚 Add New Subject")
-    target_track = st.selectbox("Subject Category", ["NEET", "JEE"], key="new_subj_track")
-    new_subject_name = st.text_input("Subject Name (e.g. Maths)", key="new_subject_input").strip()
-
-    if st.button("Save Subject", use_container_width=True):
-        if not new_subject_name:
-            st.error("Please enter a subject name.")
-        elif new_subject_name in subjects_data.get(target_track, []):
-            st.warning(f"'{new_subject_name}' is already in {target_track}.")
-        else:
-            subjects_data.setdefault(target_track, list(DEFAULT_SUBJECTS[target_track]))
-            subjects_data[target_track].append(new_subject_name)
-            save_data(SUBJECTS_FILE, subjects_data)
-            st.toast(f"✅ Added {new_subject_name} to {target_track}!", icon="🎉")
-            st.success(f"Added {new_subject_name} to {target_track}.")
             st.rerun()
 
     if students:
