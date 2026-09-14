@@ -9,6 +9,15 @@ LOG_FILE = "daily_study_logs.json"
 DIVISIONS_FILE = "hostel_divisions.json"
 TOPICS_FILE = "subject_topics_cache.json"
 
+# Permanent roster saved directly in code so reboots never erase them
+DEFAULT_STUDENTS = [
+    {"name": "Amit manoj", "grade": "Plus Two", "division": "Plus Two N1"},
+    {"name": "S Balasubramaniam", "grade": "Plus Two", "division": "Plus Two J1"},
+    {"name": "Muhammed yahhya", "grade": "Plus Two", "division": "Plus Two N1"},
+    # Add any remaining student names here using the exact same format:
+    # {"name": "Student Name", "grade": "Plus One", "division": "Plus One N1"},
+]
+
 DEFAULT_DIVISIONS = {
     "Plus One": ["Plus One N1", "Plus One N2", "Plus One J1", "Plus One J2"],
     "Plus Two": ["Plus Two N1", "Plus Two N2", "Plus Two J1"]
@@ -29,7 +38,8 @@ def load_data(filepath, default):
     if os.path.exists(filepath):
         with open(filepath, "r") as f:
             try:
-                return json.load(f)
+                data = json.load(f)
+                return data if data else default
             except Exception:
                 return default
     return default
@@ -39,25 +49,9 @@ def save_data(filepath, data):
         json.dump(data, f, indent=2)
 
 divisions = load_data(DIVISIONS_FILE, DEFAULT_DIVISIONS)
-students = load_data(DATA_FILE, [])
+students = load_data(DATA_FILE, DEFAULT_STUDENTS)
 logs = load_data(LOG_FILE, [])
 topic_cache = load_data(TOPICS_FILE, {})
-
-# --- AUTO-RECOVERY HOOK ---
-# If students got wiped on reboot, rebuild them from the study logs
-if not students and logs:
-    recovered = {}
-    for entry in logs:
-        name = entry.get("name")
-        if name and name not in recovered:
-            recovered[name] = {
-                "name": name,
-                "grade": entry.get("grade", "Plus Two"),
-                "division": entry.get("division", "Plus Two N1")
-            }
-    if recovered:
-        students = list(recovered.values())
-        save_data(DATA_FILE, students)
 
 st.set_page_config(page_title="Hostel Study Tracker", page_icon="📖", layout="centered")
 st.title("📚 Hostel Study Tracker")
@@ -95,6 +89,7 @@ with tab_log:
         selected_index = student_display_options.index(selected_display)
         selected_student = students[selected_index]
 
+        # Key tied strictly to student and date so form state never conflicts
         s_key = f"{selected_student['name']}_{selected_date_str}"
         track = "JEE" if "J" in selected_student["division"] else "NEET"
         available_subjects = SUBJECTS.get(track, ["Physics", "Chemistry", "Maths", "English"])
@@ -132,7 +127,7 @@ with tab_log:
                 s1_sub = st.selectbox("Subject", available_subjects, index=sub1_idx, key=f"s1_sub_{s_key}")
 
                 def_s1_top = existing_entry.get("s1_topic", "") if existing_entry else ""
-                s1_topic = st.text_input("Topic Studied (Required)", value=def_s1_top, placeholder="e.g. Thermodynamics, Coordinate Geometry", key=f"s1_top_{s_key}")
+                s1_topic = st.text_input("Topic Studied (Required)", value=def_s1_top, placeholder="e.g. Thermodynamics, Complex Numbers", key=f"s1_top_{s_key}")
 
                 target_opts = ["Completed", "Partial", "Incomplete"]
                 target1_idx = target_opts.index(existing_entry["s1_target"]) if (existing_entry and existing_entry.get("s1_target") in target_opts) else 0
@@ -169,7 +164,7 @@ with tab_log:
                 s2_sub = st.selectbox("Subject", available_subjects, index=sub2_idx, key=f"s2_sub_{s_key}")
 
                 def_s2_top = existing_entry.get("s2_topic", "") if existing_entry else ""
-                s2_topic = st.text_input("Topic Studied (Required)", value=def_s2_top, placeholder="e.g. Chemical Bonding, Matrices", key=f"s2_top_{s_key}")
+                s2_topic = st.text_input("Topic Studied (Required)", value=def_s2_top, placeholder="e.g. Chemical Kinetics, Integration", key=f"s2_top_{s_key}")
 
                 target2_idx = target_opts.index(existing_entry["s2_target"]) if (existing_entry and existing_entry.get("s2_target") in target_opts) else 0
                 s2_target = st.radio("Target Status", target_opts, index=target2_idx, horizontal=True, key=f"s2_tar_{s_key}")
@@ -252,7 +247,7 @@ with tab_report:
             for log in grade_logs:
                 student_block = [f"👤 *{log['name']}* ({log['division']})"]
                 
-                # Session 1 formatting
+                # Session 1 formatting: Subject, Topic, and Completion status clearly included
                 if log.get("s1_present", True):
                     student_block.append(f"▪️ *Session 1:* Started: `{log.get('s1_start', '06:00 PM')}`")
                     student_block.append(f"   ▫️ *Subject:* {log.get('s1_sub', 'N/A')}")
@@ -262,7 +257,7 @@ with tab_report:
                 else:
                     student_block.append("▪️ *Session 1:* Absent")
 
-                # Session 2 formatting
+                # Session 2 formatting: Subject, Topic, and Completion status clearly included
                 if log.get("s2_present", True):
                     student_block.append(f"▪️ *Session 2:* Started: `{log.get('s2_start', '08:30 PM')}`")
                     student_block.append(f"   ▫️ *Subject:* {log.get('s2_sub', 'N/A')}")
@@ -375,4 +370,4 @@ with tab_settings:
             save_data(DATA_FILE, students)
             st.toast(f"🗑️ Removed {del_target}", icon="⚠️")
             st.rerun()
-                    
+                
